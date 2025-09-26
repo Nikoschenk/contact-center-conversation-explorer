@@ -187,6 +187,25 @@ function containerColorClass(sentiment) {
   return "bg-white border-slate-200";
 }
 
+function downloadJSON(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  try {
+    if (typeof saveAs === "function") {
+      saveAs(blob, filename);
+      return;
+    }
+  } catch (_) {}
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+
 // Aggregation helpers
 function conversationSentimentBuckets(conv) {
   const seen = new Set();
