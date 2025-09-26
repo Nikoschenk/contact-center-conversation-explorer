@@ -165,7 +165,7 @@ const SAMPLE_DATA = {
 const PIE_COLORS = {
   positive: "#34d399", // green
   negative: "#f87171", // red
-  neutral: "#94a3b8",  // light gray
+  neutral: "#e2e8f0",  // light gray
 };
 
 // Format seconds → “Hh Mm Ss”, omit hours if zero
@@ -243,19 +243,28 @@ function computeGlobalSentiment(convs) {
 }
 
 // UI primitives
-const Btn = ({ children, onClick, variant = "default", size = "md", className = "", type = "button" }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    className={`inline-flex items-center justify-center rounded-xl border ${
-      variant === "outline"
-        ? "bg-white hover:bg-slate-50 border-slate-200"
-        : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900"
-    } ${size === "icon" ? "w-8 h-8 p-0" : "px-3 py-1.5 text-sm"} ${className}`}
-  >
-    {children}
-  </button>
-);
+const Btn = ({ children, onClick, variant = "default", size = "md", className = "", type = "button" }) => {
+  const handleTouchEnd = (event) => {
+    if (!onClick) return;
+    event.preventDefault();
+    onClick(event);
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      onTouchEnd={handleTouchEnd}
+      className={`inline-flex items-center justify-center rounded-xl border touch-manipulation ${
+        variant === "outline"
+          ? "bg-white hover:bg-slate-50 border-slate-200"
+          : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900"
+      } ${size === "icon" ? "w-8 h-8 p-0" : "px-3 py-1.5 text-sm"} ${className}`}
+    >
+      {children}
+    </button>
+  );
+};
 const Card = ({ children, className = "" }) => <div className={`border rounded-2xl bg-white ${className}`}>{children}</div>;
 const CardHeader = ({ children, className = "" }) => <div className={`px-4 pt-3 ${className}`}>{children}</div>;
 const CardContent = ({ children, className = "" }) => <div className={`px-4 pb-4 ${className}`}>{children}</div>;
