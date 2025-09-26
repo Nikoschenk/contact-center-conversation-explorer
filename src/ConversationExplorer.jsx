@@ -728,15 +728,36 @@ export default function ConversationExplorer() {
 
                         {t.role === "bot" && Array.isArray(t.agentic_action) && t.agentic_action.length > 0 && (
                           <div className="mt-2 border-t pt-2 space-y-1">
-                            {t.agentic_action.map((a, i) => (
-                              <div key={i} className="text-[11px] text-slate-600 flex items-center gap-2">
-                                <ToolActionIcon type={a.type} />
-                                {a.tool_name && <span className="px-2 py-0.5 text-[10px] rounded-full border">{a.tool_name}</span>}
-                                <code className="bg-slate-100 rounded px-1 py-0.5 overflow-x-auto">
-                                  {JSON.stringify(a.request || a.response || {}, null, 0)}
-                                </code>
-                              </div>
-                            ))}
+                            {t.agentic_action.map((a, i) => {
+                              const payload = a.request ?? a.response;
+                              const isAgentInvocation = a.type === "agent_invocation";
+                              return (
+                                <div
+                                  key={i}
+                                  className="text-[11px] text-slate-600 grid grid-cols-[28px,200px,1fr] gap-2 items-center"
+                                >
+                                  <div className="flex justify-center">
+                                    {!isAgentInvocation && <ToolActionIcon type={a.type} />}
+                                  </div>
+                                  <span
+                                    className={`inline-flex items-center justify-self-start px-2 py-0.5 text-[10px] rounded-full border ${
+                                      isAgentInvocation ? "bg-slate-50 text-slate-700" : "bg-white"
+                                    }`}
+                                  >
+                                    {isAgentInvocation ? "Agent Invocation" : a.tool_name || ""}
+                                  </span>
+                                  {isAgentInvocation ? (
+                                    <span className="text-[10px] text-slate-400">&nbsp;</span>
+                                  ) : payload ? (
+                                    <code className="bg-slate-100 rounded px-2 py-1 overflow-x-auto leading-snug">
+                                      {JSON.stringify(payload, null, 0)}
+                                    </code>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400">&nbsp;</span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
