@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import saveAs from "file-saver";
 
+const ICON_SRC = `${import.meta.env.BASE_URL}icon.png`;
+
 // ------------------------------------------------------------
 // SAMPLE DATA
 // ------------------------------------------------------------
@@ -498,7 +500,7 @@ export default function ConversationExplorer() {
       <header className="sticky top-0 z-30 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-2">
           <div className="flex items-center gap-2 text-slate-900">
-            <img src="/icon.png" alt="Conversation Explorer" className="h-8 w-auto rounded-lg shadow-sm" draggable="false" />
+            <img src={ICON_SRC} alt="Conversation Explorer" className="h-8 w-auto rounded-lg shadow-sm" draggable="false" />
             <h1 className="font-semibold text-lg">Conversation Explorer</h1>
           </div>
           <div className="ml-auto flex items-center gap-2">
