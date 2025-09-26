@@ -1,4 +1,4 @@
-# Contact Center Conversation Explorer
+# Conversation Explorer
 
 A React + Vite application for exploring, filtering, and visualizing contact center conversations (caller / bot, sentiment, duration, etc.). Supports running locally as well as deployment via GitHub Pages.
 
