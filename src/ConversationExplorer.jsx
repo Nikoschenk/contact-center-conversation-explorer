@@ -273,6 +273,20 @@ const Select = ({ value, onChange, options }) => (
 const Badge = ({ children }) => (
   <span className="px-2 py-0.5 text-[10px] rounded-full border bg-slate-50 text-slate-700">{children}</span>
 );
+const ROLE_STYLES = {
+  caller: "bg-amber-50 text-amber-700 border border-amber-200",
+  bot: "bg-sky-50 text-sky-700 border border-sky-200",
+};
+const RoleBadge = ({ role }) => {
+  const Icon = role === "caller" ? User : Bot;
+  const classes = ROLE_STYLES[role] || "bg-slate-100 text-slate-700 border border-slate-200";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold uppercase ${classes}`}>
+      <Icon className="w-3.5 h-3.5" />
+      {role}
+    </span>
+  );
+};
 
 const InfoTooltip = ({ message }) => {
   const [visible, setVisible] = useState(false);
@@ -661,8 +675,7 @@ export default function ConversationExplorer() {
                       <div className={`max-w-[80%] rounded-2xl p-3 shadow-sm border ${containerColorClass(t.sentiment)}`}>
                         <div className="flex items-center gap-2 mb-1">
                           {/* role icon + role label */}
-                          {t.role === "caller" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
-                          <span className="text-xs font-medium uppercase">{t.role}</span>
+                          <RoleBadge role={t.role} />
                           <Badge>turn #{t.turn_id}</Badge>
                           {t.intent && <span className="px-2 py-0.5 text-[10px] rounded-full border">{t.intent}</span>}
                         </div>
