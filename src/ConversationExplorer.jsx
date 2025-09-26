@@ -418,8 +418,7 @@ export default function ConversationExplorer() {
     <div className="min-h-screen w-full bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-2">
-          {/* no icon before title */}
-          <h1 className="font-semibold text-lg">Contact Center Conversation Explorer</h1>
+          <h1 className="font-semibold text-lg">Conversation Explorer</h1>
           <div className="ml-auto flex items-center gap-2">
             <input
               type="file"
@@ -429,10 +428,10 @@ export default function ConversationExplorer() {
               className="hidden"
             />
             <Btn variant="outline" onClick={() => fileInputRef.current?.click()}>
-              Load JSON
+              Load Conversations
             </Btn>
             <Btn onClick={() => downloadJSON("filtered_conversations.json", { conversations: filteredConversations })}>
-              <Download className="w-4 h-4 mr-2" /> Download (filtered)
+              <Download className="w-4 h-4 mr-2" /> Download Selection
             </Btn>
           </div>
         </div>
@@ -707,13 +706,6 @@ export default function ConversationExplorer() {
           </Card>
         </aside>
       </main>
-
-      <footer className="mx-auto max-w-7xl px-4 pb-8 text-[12px] text-slate-500">
-        <p>
-          Tip: Use <kbd className="px-1 py-0.5 rounded bg-slate-200">←</kbd>/
-          <kbd className="px-1 py-0.5 rounded bg-slate-200">→</kbd> to navigate conversations.
-        </p>
-      </footer>
     </div>
   );
 }
