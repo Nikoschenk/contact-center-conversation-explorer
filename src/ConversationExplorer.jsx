@@ -17,6 +17,7 @@ import {
   Database,
   User,
   Bot,
+  Info,
 } from "lucide-react";
 import saveAs from "file-saver";
 
@@ -207,31 +208,36 @@ function downloadJSON(filename, data) {
 
 
 // Aggregation helpers
-function conversationSentimentBuckets(conv) {
-  const seen = new Set();
-  conv.turns.forEach((t) => seen.add(t.sentiment ?? "neutral"));
-  return { hasPos: seen.has("positive"), hasNeg: seen.has("negative"), hasNeu: seen.has("neutral") };
-}
 function computeConversationSentimentRate(conv) {
   const counts = { positive: 0, neutral: 0, negative: 0 };
   conv.turns.forEach((t) => {
-    counts[t.sentiment ?? "neutral"] += 1;
+    const key = t.sentiment ?? "neutral";
+    counts[key] = (counts[key] ?? 0) + 1;
   });
   const total = conv.turns.length || 1;
-  return Object.entries(counts).map(([name, value]) => ({
+  return Object.entries(counts).map(([name, count]) => ({
     name,
-    value: Math.round((value / total) * 100),
+    count,
+    value: count,
+    percent: total ? Math.round((count / total) * 100) : 0,
   }));
 }
 function computeGlobalSentiment(convs) {
-  const buckets = { positive: 0, neutral: 0, negative: 0 };
+  const counts = { positive: 0, neutral: 0, negative: 0 };
+  let totalTurns = 0;
   convs.forEach((c) => {
-    const { hasPos, hasNeg, hasNeu } = conversationSentimentBuckets(c);
-    if (hasPos) buckets.positive += 1;
-    if (hasNeg) buckets.negative += 1;
-    if (hasNeu) buckets.neutral += 1;
+    c.turns.forEach((t) => {
+      const key = t.sentiment ?? "neutral";
+      counts[key] = (counts[key] ?? 0) + 1;
+      totalTurns += 1;
+    });
   });
-  return Object.entries(buckets).map(([name, value]) => ({ name, value }));
+  return Object.entries(counts).map(([name, count]) => ({
+    name,
+    count,
+    value: count,
+    percent: totalTurns ? Math.round((count / totalTurns) * 100) : 0,
+  }));
 }
 
 // UI primitives
@@ -268,14 +274,59 @@ const Badge = ({ children }) => (
   <span className="px-2 py-0.5 text-[10px] rounded-full border bg-slate-50 text-slate-700">{children}</span>
 );
 
+const InfoTooltip = ({ message }) => {
+  const [visible, setVisible] = useState(false);
+  const hide = () => setVisible(false);
+
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={hide}
+      onFocus={() => setVisible(true)}
+      onBlur={hide}
+    >
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        className="inline-flex items-center justify-center rounded-full p-0.5 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-300"
+        aria-label="Regex search help"
+      >
+        <Info className="w-3.5 h-3.5 text-slate-400" />
+      </button>
+      {visible && (
+        <span className="absolute left-1/2 top-full z-20 mt-1 -translate-x-1/2 whitespace-pre rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] leading-snug text-slate-700 shadow-lg">
+          {message}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const SentimentTooltip = ({ active, payload }) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const entry = payload[0];
+  const { name, payload: data } = entry;
+  const percent = data?.percent ?? Math.round(entry.value ?? 0);
+  const count = data?.count ?? entry.value ?? 0;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg">
+      <div className="font-semibold capitalize">{name}</div>
+      <div>
+        {percent}% [{count} {count === 1 ? "turn" : "turns"}]
+      </div>
+    </div>
+  );
+};
+
 // Main component
 export default function ConversationExplorer() {
   const [data, setData] = useState(SAMPLE_DATA);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   // Filter & state fields
-  const [searchTargets, setSearchTargets] = useState({ caller: true, bot: true });
-  const [positionFilter, setPositionFilter] = useState({ first: true, last: true, anywhere: true });
+  const [scope, setScope] = useState("Conversation");
+  const [positionFilter, setPositionFilter] = useState("Anywhere");
   const [regexQuery, setRegexQuery] = useState("");
   const [sentiments, setSentiments] = useState({ positive: true, neutral: true, negative: true });
   const [intent, setIntent] = useState("any");
@@ -330,30 +381,34 @@ export default function ConversationExplorer() {
         if (!conv.turns.some((t) => t.intent === intent)) return false;
       }
 
+      const matchesScope = (role) => {
+        if (scope === "Conversation") return true;
+        if (scope === "Caller Message") return role === "caller";
+        if (scope === "Bot Message") return role === "bot";
+        return true;
+      };
+
+      const matchesPosition = (idx, length) => {
+        if (positionFilter === "Anywhere") return true;
+        if (positionFilter === "First Message") return idx === 0;
+        if (positionFilter === "Last Message") return idx === length - 1;
+        return true;
+      };
+
       const sentimentOk = conv.turns.some((t, idx) => {
         const s = t.sentiment ?? "neutral";
         if (!sentiments[s]) return false;
-        if (!searchTargets[t.role]) return false;
-        const isFirst = idx === 0;
-        const isLast = idx === conv.turns.length - 1;
-        const isMiddle = !isFirst && !isLast;
-        if (!positionFilter.first && isFirst) return false;
-        if (!positionFilter.last && isLast) return false;
-        if (!positionFilter.anywhere && isMiddle) return false;
+        if (!matchesScope(t.role)) return false;
+        if (!matchesPosition(idx, conv.turns.length)) return false;
         return true;
       });
       if (!sentimentOk) return false;
 
       if (regex) {
         const anyMatch = conv.turns.some((t, idx) => {
-          if (!searchTargets[t.role]) return false;
-          const isFirst = idx === 0;
-          const isLast = idx === conv.turns.length - 1;
-          const isMiddle = !isFirst && !isLast;
-          if (!positionFilter.first && isFirst) return false;
-          if (!positionFilter.last && isLast) return false;
-          if (!positionFilter.anywhere && isMiddle) return false;
-          const hay = `${t.text ?? ""} ${t.intent ?? ""} ${t.sentiment ?? ""}`;
+          if (!matchesScope(t.role)) return false;
+          if (!matchesPosition(idx, conv.turns.length)) return false;
+          const hay = t.text ?? "";
           return regex.test(hay);
         });
         if (!anyMatch) return false;
@@ -374,7 +429,7 @@ export default function ConversationExplorer() {
     endedBy,
     intent,
     sentiments,
-    searchTargets,
+    scope,
     positionFilter,
     regex,
     tool,
@@ -413,6 +468,16 @@ export default function ConversationExplorer() {
   };
 
   const convCounter = `${Math.min(selectedIndex + 1, filteredConversations.length)} / ${filteredConversations.length}`;
+  const regexTooltipMessage = [
+    "The search supports regular expressions:",
+    "",
+    "Examples:",
+    "• hello – matches 'hello'",
+    "• goodbye|stupid – matches goodbye or stupid",
+    "• \\brefund(s)?\\b – matches refund or refunds as whole words",
+    "• hello\\s+(there|team) – finds greetings like 'hello there' or 'hello team'",
+    "• (?=.*address).*update – requires the text to mention address and update",
+  ].join("\n");
 
   return (
     <div className="min-h-screen w-full bg-slate-50 text-slate-900">
@@ -446,39 +511,10 @@ export default function ConversationExplorer() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Scope</Label>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-sm items-center">
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={searchTargets.caller} onChange={(v) => setSearchTargets((s) => ({ ...s, caller: v }))} />
-                    Caller
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={searchTargets.bot} onChange={(v) => setSearchTargets((s) => ({ ...s, bot: v }))} />
-                    Bot
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <Label>Position</Label>
-                <div className="mt-2 grid grid-cols-3 gap-2 text-sm items-center">
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={positionFilter.first} onChange={(v) => setPositionFilter((p) => ({ ...p, first: v }))} />
-                    First
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={positionFilter.anywhere} onChange={(v) => setPositionFilter((p) => ({ ...p, anywhere: v }))} />
-                    Anywhere
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <Checkbox checked={positionFilter.last} onChange={(v) => setPositionFilter((p) => ({ ...p, last: v }))} />
-                    Last
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <Label>Regex (text/intent/sentiment)</Label>
+                <Label className="flex items-center gap-2">
+                  Search Message
+                  <InfoTooltip message={regexTooltipMessage} />
+                </Label>
                 <div className="relative mt-1">
                   <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
                   <TextInput
@@ -489,6 +525,30 @@ export default function ConversationExplorer() {
                   />
                 </div>
                 {regexQuery && !regex && <p className="text-[11px] text-rose-600 mt-1">Invalid regex</p>}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <Label>Scope</Label>
+                  <div className="mt-2">
+                    <Select
+                      value={scope}
+                      onChange={setScope}
+                      options={["Conversation", "Caller Message", "Bot Message"]}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Position</Label>
+                  <div className="mt-2">
+                    <Select
+                      value={positionFilter}
+                      onChange={setPositionFilter}
+                      options={["Anywhere", "First Message", "Last Message"]}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -668,7 +728,7 @@ export default function ConversationExplorer() {
                         <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name] || PIE_COLORS.neutral} />
                       ))}
                     </Pie>
-                    <ReTooltip />
+                    <ReTooltip content={<SentimentTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -698,7 +758,7 @@ export default function ConversationExplorer() {
                         <Cell key={`cell-local-${index}`} fill={PIE_COLORS[entry.name] || PIE_COLORS.neutral} />
                       ))}
                     </Pie>
-                    <ReTooltip />
+                    <ReTooltip content={<SentimentTooltip />} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
