@@ -1,20 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { PieChart, Pie, Cell, Tooltip as ReTooltip, ResponsiveContainer } from "recharts";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as ReTooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Download, Filter, Search, PhoneOff, Cpu, Database, User, Bot } from "lucide-react";
-import saveAs from "file-saver"; // file-saver default export (CDN/ESM compatible)
-
-// =============================================================
-// NOTE: This version removes shadcn/ui imports to avoid missing
-// components. It uses native HTML elements only.
-// For styling, include Tailwind via CDN in index.html to avoid
-// tailwind CLI issues:
-//   <script src="https://cdn.tailwindcss.com"></script>
-// The app will still function without Tailwind (unstyled).
-// =============================================================
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Search,
+  PhoneOff,
+  Cpu,
+  Database,
+  User,
+  Bot,
+} from "lucide-react";
+import saveAs from "file-saver";
 
 // ------------------------------------------------------------
-// SAMPLE DATA: feel free to replace via the file loader below
+// SAMPLE DATA
 // ------------------------------------------------------------
 const SAMPLE_DATA = {
   conversations: [
@@ -123,8 +130,16 @@ const SAMPLE_DATA = {
           intent: "faq_query",
           sentiment: "neutral",
           agentic_action: [
-            { type: "tool_call", tool_name: "query_knowledgebase", request: { query: "opening hours tomorrow" } },
-            { type: "tool_output", tool_name: "query_knowledgebase", response: { hours: "09:00-17:00" } },
+            {
+              type: "tool_call",
+              tool_name: "query_knowledgebase",
+              request: { query: "opening hours tomorrow" },
+            },
+            {
+              type: "tool_output",
+              tool_name: "query_knowledgebase",
+              response: { hours: "09:00-17:00" },
+            },
           ],
         },
         {
@@ -141,43 +156,54 @@ const SAMPLE_DATA = {
   ],
 };
 
-// ---------- Helpers ----------
-const COLORS = ["#34d399", "#a3e635", "#60a5fa", "#fbbf24", "#f87171", "#94a3b8"]; // greens, blue, amber, red, slate
-const roleSide = (role) => (role === "caller" ? "left" : "right");
-const roleIcon = (role) => (role === "caller" ? <User className="w-4 h-4"/> : <Bot className="w-4 h-4"/>);
-const sentimentColor = (s) => (s === "positive" ? "bg-emerald-100 text-emerald-800" : s === "negative" ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700");
+// ---------- Helpers & Styling Logic ----------
 
-function downloadJSON(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  try {
-    if (typeof saveAs === "function") {
-      saveAs(blob, filename);
-      return;
-    }
-  } catch (_) {}
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+// Map sentiment name to pie colors
+const PIE_COLORS = {
+  positive: "#34d399", // green
+  negative: "#f87171", // red
+  neutral: "#94a3b8",  // light gray
+};
+
+// Format seconds → “Hh Mm Ss”, omit hours if zero
+function formatDuration(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(" ");
 }
 
+// Determine left/right side by role
+const roleSide = (role) => (role === "caller" ? "left" : "right");
+
+// Color container box by sentiment
+function containerColorClass(sentiment) {
+  if (sentiment === "positive") return "bg-emerald-50 border-emerald-300";
+  if (sentiment === "negative") return "bg-rose-50 border-rose-300";
+  return "bg-white border-slate-200";
+}
+
+// Aggregation helpers
 function conversationSentimentBuckets(conv) {
   const seen = new Set();
   conv.turns.forEach((t) => seen.add(t.sentiment ?? "neutral"));
   return { hasPos: seen.has("positive"), hasNeg: seen.has("negative"), hasNeu: seen.has("neutral") };
 }
-
 function computeConversationSentimentRate(conv) {
   const counts = { positive: 0, neutral: 0, negative: 0 };
-  conv.turns.forEach((t) => (counts[t.sentiment ?? "neutral"] += 1));
+  conv.turns.forEach((t) => {
+    counts[t.sentiment ?? "neutral"] += 1;
+  });
   const total = conv.turns.length || 1;
-  return Object.entries(counts).map(([name, value]) => ({ name, value: Math.round((value / total) * 100) }));
+  return Object.entries(counts).map(([name, value]) => ({
+    name,
+    value: Math.round((value / total) * 100),
+  }));
 }
-
 function computeGlobalSentiment(convs) {
   const buckets = { positive: 0, neutral: 0, negative: 0 };
   convs.forEach((c) => {
@@ -189,37 +215,27 @@ function computeGlobalSentiment(convs) {
   return Object.entries(buckets).map(([name, value]) => ({ name, value }));
 }
 
-// ---------- Tiny UI primitives (no external UI lib) ----------
+// UI primitives
 const Btn = ({ children, onClick, variant = "default", size = "md", className = "", type = "button" }) => (
   <button
     type={type}
     onClick={onClick}
     className={`inline-flex items-center justify-center rounded-xl border ${
-      variant === "outline" ? "bg-white hover:bg-slate-50 border-slate-200" : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900"
+      variant === "outline"
+        ? "bg-white hover:bg-slate-50 border-slate-200"
+        : "bg-slate-900 text-white hover:bg-slate-800 border-slate-900"
     } ${size === "icon" ? "w-8 h-8 p-0" : "px-3 py-1.5 text-sm"} ${className}`}
   >
     {children}
   </button>
 );
-
-const Card = ({ children, className = "" }) => (
-  <div className={`border rounded-2xl bg-white ${className}`}>{children}</div>
-);
-const CardHeader = ({ children, className = "" }) => (
-  <div className={`px-4 pt-3 ${className}`}>{children}</div>
-);
-const CardContent = ({ children, className = "" }) => (
-  <div className={`px-4 pb-4 ${className}`}>{children}</div>
-);
-const CardTitle = ({ children, className = "" }) => (
-  <h2 className={`font-semibold ${className}`}>{children}</h2>
-);
-
+const Card = ({ children, className = "" }) => <div className={`border rounded-2xl bg-white ${className}`}>{children}</div>;
+const CardHeader = ({ children, className = "" }) => <div className={`px-4 pt-3 ${className}`}>{children}</div>;
+const CardContent = ({ children, className = "" }) => <div className={`px-4 pb-4 ${className}`}>{children}</div>;
+const CardTitle = ({ children, className = "" }) => <h2 className={`font-semibold ${className}`}>{children}</h2>;
 const TextInput = (props) => <input {...props} className={`w-full rounded-xl border px-3 py-2 text-sm ${props.className || ""}`} />;
 const Label = ({ children, className = "" }) => <label className={`text-xs text-slate-600 ${className}`}>{children}</label>;
-const Checkbox = ({ checked, onChange }) => (
-  <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-);
+const Checkbox = ({ checked, onChange }) => <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />;
 const Select = ({ value, onChange, options }) => (
   <select value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-xl border px-3 py-2 text-sm">
     {options.map((o) => (
@@ -233,19 +249,19 @@ const Badge = ({ children }) => (
   <span className="px-2 py-0.5 text-[10px] rounded-full border bg-slate-50 text-slate-700">{children}</span>
 );
 
-// ---------- Main Component ----------
+// Main component
 export default function ConversationExplorer() {
   const [data, setData] = useState(SAMPLE_DATA);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Filters
+  // Filter & state fields
   const [searchTargets, setSearchTargets] = useState({ caller: true, bot: true });
   const [positionFilter, setPositionFilter] = useState({ first: true, last: true, anywhere: true });
   const [regexQuery, setRegexQuery] = useState("");
   const [sentiments, setSentiments] = useState({ positive: true, neutral: true, negative: true });
   const [intent, setIntent] = useState("any");
   const [tool, setTool] = useState("any");
-  const [endedBy, setEndedBy] = useState("any"); // any | caller | bot
+  const [endedBy, setEndedBy] = useState("any");
   const [minTurns, setMinTurns] = useState(0);
   const [maxTurns, setMaxTurns] = useState(200);
   const [minSecs, setMinSecs] = useState(0);
@@ -253,7 +269,6 @@ export default function ConversationExplorer() {
 
   const allConvs = data.conversations || [];
 
-  // Populate dropdowns
   const allIntents = useMemo(() => {
     const s = new Set();
     allConvs.forEach((c) => c.turns.forEach((t) => t.intent && s.add(t.intent)));
@@ -272,34 +287,33 @@ export default function ConversationExplorer() {
     if (!regexQuery) return null;
     try {
       return new RegExp(regexQuery, "i");
-    } catch (e) {
+    } catch {
       return null;
     }
   }, [regexQuery]);
 
-  // Filtering logic
   const filteredConversations = useMemo(() => {
     return allConvs.filter((conv) => {
-      // length filters
       if (conv.turns.length < minTurns || conv.turns.length > maxTurns) return false;
       if (conv.duration_seconds < minSecs || conv.duration_seconds > maxSecs) return false;
 
-      // ended by filter
       if (endedBy !== "any") {
         const last = conv.turns[conv.turns.length - 1];
-        const endedRole = last?.ended_call ? last.role : last?.role === "bot" && last?.intent === "conversation_end" ? "bot" : undefined;
+        const endedRole = last?.ended_call
+          ? last.role
+          : last?.role === "bot" && last?.intent === "conversation_end"
+          ? "bot"
+          : undefined;
         if (!endedRole || endedRole !== endedBy) return false;
       }
 
-      // intent filter (conversation-level: any turn matches)
       if (intent !== "any") {
-        const anyIntent = conv.turns.some((t) => t.intent === intent);
-        if (!anyIntent) return false;
+        if (!conv.turns.some((t) => t.intent === intent)) return false;
       }
 
-      // sentiment filter
       const sentimentOk = conv.turns.some((t, idx) => {
-        if (!sentiments[t.sentiment ?? "neutral"]) return false;
+        const s = t.sentiment ?? "neutral";
+        if (!sentiments[s]) return false;
         if (!searchTargets[t.role]) return false;
         const isFirst = idx === 0;
         const isLast = idx === conv.turns.length - 1;
@@ -311,7 +325,6 @@ export default function ConversationExplorer() {
       });
       if (!sentimentOk) return false;
 
-      // regex scope & position
       if (regex) {
         const anyMatch = conv.turns.some((t, idx) => {
           if (!searchTargets[t.role]) return false;
@@ -327,59 +340,67 @@ export default function ConversationExplorer() {
         if (!anyMatch) return false;
       }
 
-      // tool filter
       if (tool !== "any") {
-        const hasTool = conv.turns.some((t) => (t.agentic_action || []).some((a) => a.tool_name === tool));
-        if (!hasTool) return false;
+        if (!conv.turns.some((t) => (t.agentic_action || []).some((a) => a.tool_name === tool))) return false;
       }
 
       return true;
     });
-  }, [allConvs, minTurns, maxTurns, minSecs, maxSecs, endedBy, intent, sentiments, searchTargets, positionFilter, regex, tool]);
+  }, [
+    allConvs,
+    minTurns,
+    maxTurns,
+    minSecs,
+    maxSecs,
+    endedBy,
+    intent,
+    sentiments,
+    searchTargets,
+    positionFilter,
+    regex,
+    tool,
+  ]);
 
-  // Selected conversation index should stay within bounds
   useEffect(() => {
     if (selectedIndex >= filteredConversations.length) setSelectedIndex(0);
   }, [filteredConversations.length, selectedIndex]);
 
   const selected = filteredConversations[selectedIndex];
-
-  // Metrics
   const globalPie = useMemo(() => computeGlobalSentiment(filteredConversations), [filteredConversations]);
   const localPie = useMemo(() => (selected ? computeConversationSentimentRate(selected) : []), [selected]);
-  const totalDuration = useMemo(() => filteredConversations.reduce((acc, c) => acc + (c.duration_seconds || 0), 0), [filteredConversations]);
+  const totalDuration = useMemo(
+    () => filteredConversations.reduce((acc, c) => acc + (c.duration_seconds || 0), 0),
+    [filteredConversations]
+  );
 
-  // Keyboard nav
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === "ArrowRight") setSelectedIndex((i) => Math.min(i + 1, Math.max(filteredConversations.length - 1, 0)));
+      if (e.key === "ArrowRight") setSelectedIndex((i) => Math.min(i + 1, filteredConversations.length - 1));
       if (e.key === "ArrowLeft") setSelectedIndex((i) => Math.max(i - 1, 0));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [filteredConversations.length]);
 
-  // File loader
   const fileInputRef = useRef(null);
   const handleFile = async (file) => {
     const text = await file.text();
     try {
       const json = JSON.parse(text);
       if (json.conversations) setData(json);
-    } catch (e) {
+    } catch {
       alert("Invalid JSON file");
     }
   };
 
-  // UI helpers
-  const convCounter = `${Math.min(selectedIndex + 1, Math.max(filteredConversations.length, 0))} / ${filteredConversations.length}`;
+  const convCounter = `${Math.min(selectedIndex + 1, filteredConversations.length)} / ${filteredConversations.length}`;
 
   return (
     <div className="min-h-screen w-full bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-2">
-          <Filter className="w-5 h-5" />
-          <h1 className="font-semibold">Contact Center Conversation Explorer</h1>
+          {/* no icon before title */}
+          <h1 className="font-semibold text-lg">Contact Center Conversation Explorer</h1>
           <div className="ml-auto flex items-center gap-2">
             <input
               type="file"
@@ -388,7 +409,9 @@ export default function ConversationExplorer() {
               onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
               className="hidden"
             />
-            <Btn variant="outline" onClick={() => fileInputRef.current?.click()}>Load JSON</Btn>
+            <Btn variant="outline" onClick={() => fileInputRef.current?.click()}>
+              Load JSON
+            </Btn>
             <Btn onClick={() => downloadJSON("filtered_conversations.json", { conversations: filteredConversations })}>
               <Download className="w-4 h-4 mr-2" /> Download (filtered)
             </Btn>
@@ -400,42 +423,63 @@ export default function ConversationExplorer() {
         {/* Left Sidebar: Filters */}
         <aside className="col-span-12 lg:col-span-3 space-y-3">
           <Card className="shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Search & Filters</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Search & Filters</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-3">
               <div>
                 <Label>Scope</Label>
                 <div className="mt-2 grid grid-cols-2 gap-2 text-sm items-center">
-                  <label className="flex items-center gap-2"><Checkbox checked={searchTargets.caller} onChange={(v)=>setSearchTargets(s=>({...s, caller: v}))}/> Caller</label>
-                  <label className="flex items-center gap-2"><Checkbox checked={searchTargets.bot} onChange={(v)=>setSearchTargets(s=>({...s, bot: v}))}/> Bot</label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={searchTargets.caller} onChange={(v) => setSearchTargets((s) => ({ ...s, caller: v }))} />
+                    Caller
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={searchTargets.bot} onChange={(v) => setSearchTargets((s) => ({ ...s, bot: v }))} />
+                    Bot
+                  </label>
                 </div>
               </div>
 
               <div>
                 <Label>Position</Label>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm items-center">
-                  <label className="flex items-center gap-2"><Checkbox checked={positionFilter.first} onChange={(v)=>setPositionFilter(p=>({...p, first: v}))}/> First</label>
-                  <label className="flex items-center gap-2"><Checkbox checked={positionFilter.anywhere} onChange={(v)=>setPositionFilter(p=>({...p, anywhere: v}))}/> Anywhere</label>
-                  <label className="flex items-center gap-2"><Checkbox checked={positionFilter.last} onChange={(v)=>setPositionFilter(p=>({...p, last: v}))}/> Last</label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={positionFilter.first} onChange={(v) => setPositionFilter((p) => ({ ...p, first: v }))} />
+                    First
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={positionFilter.anywhere} onChange={(v) => setPositionFilter((p) => ({ ...p, anywhere: v }))} />
+                    Anywhere
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <Checkbox checked={positionFilter.last} onChange={(v) => setPositionFilter((p) => ({ ...p, last: v }))} />
+                    Last
+                  </label>
                 </div>
               </div>
 
               <div>
                 <Label>Regex (text/intent/sentiment)</Label>
                 <div className="relative mt-1">
-                  <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400"/>
-                  <TextInput value={regexQuery} onChange={(e)=>setRegexQuery(e.target.value)} placeholder="e.g. goodbye|stupid" className="pl-8"/>
+                  <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
+                  <TextInput
+                    value={regexQuery}
+                    onChange={(e) => setRegexQuery(e.target.value)}
+                    placeholder="e.g. goodbye|stupid"
+                    className="pl-8"
+                  />
                 </div>
-                {regexQuery && !regex && (
-                  <p className="text-[11px] text-rose-600 mt-1">Invalid regex</p>
-                )}
+                {regexQuery && !regex && <p className="text-[11px] text-rose-600 mt-1">Invalid regex</p>}
               </div>
 
               <div>
                 <Label>Sentiment</Label>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-sm items-center">
-                  {(["positive","neutral","negative"]).map((s)=>(
+                  {["positive", "neutral", "negative"].map((s) => (
                     <label key={s} className="flex items-center gap-2">
-                      <Checkbox checked={sentiments[s]} onChange={(v)=>setSentiments((old)=>({...old, [s]: v}))}/> {s}
+                      <Checkbox checked={sentiments[s]} onChange={(v) => setSentiments((old) => ({ ...old, [s]: v }))} />
+                      {s}
                     </label>
                   ))}
                 </div>
@@ -454,27 +498,49 @@ export default function ConversationExplorer() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Min turns</Label>
-                  <TextInput type="number" value={minTurns} min={0} onChange={(e)=>setMinTurns(Number(e.target.value||0))}/>
+                  <TextInput
+                    type="number"
+                    value={minTurns}
+                    min={0}
+                    onChange={(e) => setMinTurns(Number(e.target.value || 0))}
+                  />
                 </div>
                 <div>
                   <Label>Max turns</Label>
-                  <TextInput type="number" value={maxTurns} min={0} onChange={(e)=>setMaxTurns(Number(e.target.value||0))}/>
+                  <TextInput
+                    type="number"
+                    value={maxTurns}
+                    min={0}
+                    onChange={(e) => setMaxTurns(Number(e.target.value || 0))}
+                  />
                 </div>
                 <div>
                   <Label>Min seconds</Label>
-                  <TextInput type="number" value={minSecs} min={0} onChange={(e)=>setMinSecs(Number(e.target.value||0))}/>
+                  <TextInput
+                    type="number"
+                    value={minSecs}
+                    min={0}
+                    onChange={(e) => setMinSecs(Number(e.target.value || 0))}
+                  />
                 </div>
                 <div>
                   <Label>Max seconds</Label>
-                  <TextInput type="number" value={maxSecs} min={0} onChange={(e)=>setMaxSecs(Number(e.target.value||0))}/>
+                  <TextInput
+                    type="number"
+                    value={maxSecs}
+                    min={0}
+                    onChange={(e) => setMaxSecs(Number(e.target.value || 0))}
+                  />
                 </div>
               </div>
 
               <div>
                 <Label>Who ended the call?</Label>
                 <div className="mt-2 grid grid-cols-3 gap-2">
-                  {["any","caller","bot"].map((v)=> (
-                    <Btn key={v} variant={endedBy===v?"default":"outline"} onClick={()=>setEndedBy(v)}>{v}</Btn>
+                  {["any", "caller", "bot"].map((v) => (
+                    <Btn key={v} variant={endedBy === v ? "default" : "outline"} onClick={() => setEndedBy(v)}>
+                      {v}
+                    </Btn>
                   ))}
                 </div>
               </div>
@@ -482,14 +548,21 @@ export default function ConversationExplorer() {
           </Card>
         </aside>
 
-        {/* Center: Conversation Viewer */}
+        {/* Conversation display */}
         <section className="col-span-12 lg:col-span-6 flex flex-col gap-3">
           <Card className="shadow-sm">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Btn variant="outline" onClick={()=>setSelectedIndex((i)=>Math.max(i-1,0))}><ChevronLeft className="w-4 h-4"/></Btn>
-                  <Btn variant="outline" onClick={()=>setSelectedIndex((i)=>Math.min(i+1, Math.max(filteredConversations.length-1,0)))}><ChevronRight className="w-4 h-4"/></Btn>
+                  <Btn variant="outline" onClick={() => setSelectedIndex((i) => Math.max(i - 1, 0))}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Btn>
+                  <Btn
+                    variant="outline"
+                    onClick={() => setSelectedIndex((i) => Math.min(i + 1, filteredConversations.length - 1))}  
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </Btn>
                   <span className="text-sm text-slate-600 ml-2">{convCounter}</span>
                 </div>
                 <div className="text-sm text-slate-500">Filtered from {allConvs.length} total</div>
@@ -505,35 +578,40 @@ export default function ConversationExplorer() {
                       key={t.turn_id ?? idx}
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`flex ${roleSide(t.role)==="left"?"justify-start":"justify-end"}`}
+                      className={`flex ${roleSide(t.role) === "left" ? "justify-start" : "justify-end"}`}
                     >
-                      <div className={`max-w-[80%] rounded-2xl p-3 shadow-sm border ${t.role==="caller"?"bg-white":"bg-emerald-50"}`}>
+                      <div className={`max-w-[80%] rounded-2xl p-3 shadow-sm border ${containerColorClass(t.sentiment)}`}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${sentimentColor(t.sentiment)}`}>
-                            {roleIcon(t.role)} {t.role}
-                          </span>
+                          {/* role icon + role label */}
+                          {t.role === "caller" ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                          <span className="text-xs font-medium uppercase">{t.role}</span>
                           <Badge>turn #{t.turn_id}</Badge>
                           {t.intent && <span className="px-2 py-0.5 text-[10px] rounded-full border">{t.intent}</span>}
                         </div>
-                        <div className="font-medium leading-snug">{t.text || <span className="italic text-slate-400">(no text)</span>}</div>
+                        <div className="font-medium leading-snug">
+                          {t.text || <span className="italic text-slate-400">(no text)</span>}
+                        </div>
                         <div className="mt-1 text-xs text-slate-500 flex flex-wrap items-center gap-2">
                           <span>{new Date(t.timestamp || Date.now()).toLocaleString()}</span>
                           <span>• sentiment: {t.sentiment ?? "neutral"}</span>
                           {t.ended_call && (
-                            <span className="inline-flex items-center gap-1"><PhoneOff className="w-3 h-3"/> ended call</span>
+                            <span className="inline-flex items-center gap-1">
+                              <PhoneOff className="w-3 h-3" /> ended call
+                            </span>
                           )}
                         </div>
 
-                        {/* Bot action ribbon */}
                         {t.role === "bot" && Array.isArray(t.agentic_action) && t.agentic_action.length > 0 && (
                           <div className="mt-2 border-t pt-2 space-y-1">
                             {t.agentic_action.map((a, i) => (
                               <div key={i} className="text-[11px] text-slate-600 flex items-center gap-2">
-                                {a.type === "tool_call" && <Cpu className="w-3 h-3"/>}
-                                {a.type === "tool_output" && <Database className="w-3 h-3"/>}
-                                {a.type === "persistent_storage" && <Database className="w-3 h-3"/>}
+                                {a.type === "tool_call" && <Cpu className="w-3 h-3" />}
+                                {a.type === "tool_output" && <Database className="w-3 h-3" />}
+                                {a.type === "persistent_storage" && <Database className="w-3 h-3" />}
                                 {a.tool_name && <span className="px-2 py-0.5 text-[10px] rounded-full border">{a.tool_name}</span>}
-                                <code className="bg-slate-100 rounded px-1 py-0.5 overflow-x-auto">{JSON.stringify(a.request || a.response || {}, null, 0)}</code>
+                                <code className="bg-slate-100 rounded px-1 py-0.5 overflow-x-auto">
+                                  {JSON.stringify(a.request || a.response || {}, null, 0)}
+                                </code>
                               </div>
                             ))}
                           </div>
@@ -547,24 +625,32 @@ export default function ConversationExplorer() {
           </Card>
         </section>
 
-        {/* Right: Metrics */}
+        {/* Metrics */}
         <aside className="col-span-12 lg:col-span-3 space-y-3">
           <Card className="shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Global Metrics</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Global Metrics</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="p-2 bg-white rounded-xl border"><div className="text-slate-500"># Conversations</div><div className="text-lg font-semibold">{filteredConversations.length}</div></div>
-                <div className="p-2 bg-white rounded-xl border"><div className="text-slate-500">Total Duration</div><div className="text-lg font-semibold">{Math.floor(totalDuration/3600)}h {totalDuration%3600}s</div></div>
+                <div className="p-2 bg-white rounded-xl border">
+                  <div className="text-slate-500"># Conversations</div>
+                  <div className="text-lg font-semibold">{filteredConversations.length}</div>
+                </div>
+                <div className="p-2 bg-white rounded-xl border">
+                  <div className="text-slate-500">Total Duration</div>
+                  <div className="text-lg font-semibold">{formatDuration(totalDuration)}</div>
+                </div>
               </div>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={globalPie} dataKey="value" nameKey="name" outerRadius={70}>
                       {globalPie.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[entry.name] || PIE_COLORS.neutral} />
                       ))}
                     </Pie>
-                    <ReTooltip/>
+                    <ReTooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -572,21 +658,29 @@ export default function ConversationExplorer() {
           </Card>
 
           <Card className="shadow-sm">
-            <CardHeader className="pb-2"><CardTitle className="text-base">Conversation Metrics</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Conversation Metrics</CardTitle>
+            </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="p-2 bg-white rounded-xl border"><div className="text-slate-500"># Turns</div><div className="text-lg font-semibold">{selected?.turns.length ?? 0}</div></div>
-                <div className="p-2 bg-white rounded-xl border"><div className="text-slate-500">Duration (s)</div><div className="text-lg font-semibold">{selected?.duration_seconds ?? 0}</div></div>
+                <div className="p-2 bg-white rounded-xl border">
+                  <div className="text-slate-500"># Turns</div>
+                  <div className="text-lg font-semibold">{selected?.turns.length ?? 0}</div>
+                </div>
+                <div className="p-2 bg-white rounded-xl border">
+                  <div className="text-slate-500">Duration</div>
+                  <div className="text-lg font-semibold">{formatDuration(selected?.duration_seconds ?? 0)}</div>
+                </div>
               </div>
               <div className="h-40">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={localPie} dataKey="value" nameKey="name" outerRadius={70}>
                       {localPie.map((entry, index) => (
-                        <Cell key={`cell-local-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`cell-local-${index}`} fill={PIE_COLORS[entry.name] || PIE_COLORS.neutral} />
                       ))}
                     </Pie>
-                    <ReTooltip/>
+                    <ReTooltip />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -596,7 +690,10 @@ export default function ConversationExplorer() {
       </main>
 
       <footer className="mx-auto max-w-7xl px-4 pb-8 text-[12px] text-slate-500">
-        <p>Tip: Use <kbd className="px-1 py-0.5 rounded bg-slate-200">←</kbd>/<kbd className="px-1 py-0.5 rounded bg-slate-200">→</kbd> to navigate conversations. Works without Tailwind; add CDN for styling.</p>
+        <p>
+          Tip: Use <kbd className="px-1 py-0.5 rounded bg-slate-200">←</kbd>/
+          <kbd className="px-1 py-0.5 rounded bg-slate-200">→</kbd> to navigate conversations.
+        </p>
       </footer>
     </div>
   );
