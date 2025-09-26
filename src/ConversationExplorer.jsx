@@ -497,7 +497,10 @@ export default function ConversationExplorer() {
     <div className="min-h-screen w-full bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-30 border-b bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-2">
-          <h1 className="font-semibold text-lg">Conversation Explorer</h1>
+          <div className="flex items-center gap-2 text-slate-900">
+            <img src="/icon.png" alt="Conversation Explorer" className="h-8 w-auto rounded-lg shadow-sm" draggable="false" />
+            <h1 className="font-semibold text-lg">Conversation Explorer</h1>
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <input
               type="file"
