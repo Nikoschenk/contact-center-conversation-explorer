@@ -13,8 +13,6 @@ import {
   Download,
   Search,
   PhoneOff,
-  Cpu,
-  Database,
   User,
   Bot,
   Info,
@@ -22,6 +20,11 @@ import {
 import saveAs from "file-saver";
 
 const ICON_SRC = `${import.meta.env.BASE_URL}icon.png`;
+const TOOL_ICON_SRC = {
+  tool_call: `${import.meta.env.BASE_URL}tool-call.png`,
+  tool_output: `${import.meta.env.BASE_URL}tool-output.png`,
+  persistent_storage: `${import.meta.env.BASE_URL}persistent-storage.png`,
+};
 
 // ------------------------------------------------------------
 // SAMPLE DATA
@@ -263,6 +266,23 @@ const Btn = ({ children, onClick, variant = "default", size = "md", className = 
     >
       {children}
     </button>
+  );
+};
+const TOOL_ICON_ALT = {
+  tool_call: "Tool call",
+  tool_output: "Tool output",
+  persistent_storage: "Persistent storage",
+};
+const ToolActionIcon = ({ type }) => {
+  const src = TOOL_ICON_SRC[type];
+  if (!src) return null;
+  return (
+    <img
+      src={src}
+      alt={TOOL_ICON_ALT[type] || "Tool action"}
+      className="h-3.5 w-auto select-none"
+      draggable="false"
+    />
   );
 };
 const Card = ({ children, className = "" }) => <div className={`border rounded-2xl bg-white ${className}`}>{children}</div>;
@@ -710,9 +730,7 @@ export default function ConversationExplorer() {
                           <div className="mt-2 border-t pt-2 space-y-1">
                             {t.agentic_action.map((a, i) => (
                               <div key={i} className="text-[11px] text-slate-600 flex items-center gap-2">
-                                {a.type === "tool_call" && <Cpu className="w-3 h-3" />}
-                                {a.type === "tool_output" && <Database className="w-3 h-3" />}
-                                {a.type === "persistent_storage" && <Database className="w-3 h-3" />}
+                                <ToolActionIcon type={a.type} />
                                 {a.tool_name && <span className="px-2 py-0.5 text-[10px] rounded-full border">{a.tool_name}</span>}
                                 <code className="bg-slate-100 rounded px-1 py-0.5 overflow-x-auto">
                                   {JSON.stringify(a.request || a.response || {}, null, 0)}
